@@ -3,7 +3,10 @@ require('dotenv').config();
 const bodyParser = require("body-parser");
 const express = require("express");
 const mongoose = require("mongoose");
-const encrytion = require("mongoose-encryption");
+const md5 = require("md5");
+const bcrypt = require("bcrypt");
+const { report } = require('process');
+const saltRounds = 10;
 
 const app = express();
 
@@ -21,9 +24,6 @@ const userSchema = new mongoose.Schema({
     password: { type: String, require: true } 
 });
 
-
-userSchema.plugin(encrytion, { secret: process.env.secret, encryptFields: ['password'] });
-
 const User = mongoose.model("User", userSchema);
 
 app.get("/", function(req, res) {
@@ -35,17 +35,22 @@ app.get("/register", function(req, res) {
 });
 
 app.post("/register", function(req, res) {
-    const newUser = new User({
-        email: req.body.username,
-        password: req.body.password
-    });
-    // res.send(newUser);
-    newUser.save(function(err) {
-        if (err) {
-            res.send(err);
-        } else {
-            res.render("secrets");
-        }
+
+    bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+
+        const newUser = new User({
+            email: req.body.username,
+            password: hash
+        });
+        // res.send(newUser);
+        newUser.save(function(err) {
+            if (err) {
+                console.log(err);
+                res.send("Your email is already existed.");
+            } else {
+                res.render("secrets");
+            }
+        });
     });
 });
 
@@ -58,14 +63,18 @@ app.post("/login", function(req, res) {
     User.findOne({email: req.body.username}, function(err, foundUser) {
 
         if (err) {
-            console.log(err);
+            console.log("err");
         } else {
             if (foundUser) {
-                if (foundUser.password === req.body.password) {
-                    res.render("secrets");
-                } else {
-                    res.render("login");
-                }
+
+                bcrypt.compare(req.body.password, foundUser.password, function(err, result) {
+
+                    if (result === true) {
+                        res.render("secrets");
+                    } else {
+                        res.render("login");
+                    }
+                });
             } else {
                 res.render("home");
             }
